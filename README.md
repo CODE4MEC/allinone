@@ -1,4 +1,4 @@
-# allinone
+# CODE4MEC ALL_IN_ONE
   CODE4MEC is a cooperative defense framework for MEC. It aims to adapt to defense workload changes by provisioning and de-provisioning container-carrie defense resources from a cluster of MEC nodes in an automatic way.
   
   CODE4MEC framework contains two kinds of components, i.e., the controller and MEC nodes. 
