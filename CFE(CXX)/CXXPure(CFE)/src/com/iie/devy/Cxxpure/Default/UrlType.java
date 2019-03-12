@@ -43,6 +43,6 @@ public final class UrlType {
 	
 	//CXX unique
 	public static String IP_VServer;
-	public static String IP_UP; //用户面IP（如192.168.0.101），区分控制面(节点IP，10.10.28.1)
+	public static String IP_UP; //user plain IP（used by users, vServer, etc., e.g.,192.168.0.101），different from control plain IP (used by CDO and CFE, e.g., 10.10.28.1)
 
 }

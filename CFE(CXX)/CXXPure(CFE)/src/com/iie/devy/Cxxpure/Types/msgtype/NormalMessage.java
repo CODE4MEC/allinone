@@ -29,11 +29,16 @@ public class NormalMessage {
 	@JsonIgnore
 	public static final String REQ_OVS_COMMAND="REQ_OVS_COMMAND";
 	@JsonIgnore
+	public static final String REQ_UFD_OFFLOAD="REQ_UFD_OFFLOAD";
+	@JsonIgnore
+	public static final String REQ_CONTEXT_TRANSFER_CFE="REQ_CONTEXT_TRANSFER_CFE";
+	@JsonIgnore
 	public static final String CODE_RELEASE_P1_CHECK_PERMISSION="CODE_RELEASE_P1_CHECK_PERMISSION";
 	@JsonIgnore
 	public static final String CODE_RELEASE_P2_REQ_DEL_RULES="CODE_RELEASE_P2_REQ_DEL_RULES";
 	@JsonIgnore
 	public static final String REQ_RELEASE_REQUESTERS_UFD_OVS_PORT="REQ_RELEASE_REQUESTERS_UFD_OVS_PORT";
+	
 	
 	public NormalMessage()
 	{
@@ -95,7 +100,7 @@ public class NormalMessage {
 	public static NormalMessage FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+			//parse message
         ObjectMapper mapper = new ObjectMapper();
         NormalMessage normalmsg = mapper.readValue(jsonStr, NormalMessage.class);
 		return normalmsg;	     

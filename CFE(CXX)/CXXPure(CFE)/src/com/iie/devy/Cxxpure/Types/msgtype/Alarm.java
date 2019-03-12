@@ -50,7 +50,7 @@ public class Alarm {
 	public static Alarm FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+    	  	//parse message
         ObjectMapper mapper = new ObjectMapper();
         Alarm obj = mapper.readValue(jsonStr, Alarm.class);
 		return obj;	     

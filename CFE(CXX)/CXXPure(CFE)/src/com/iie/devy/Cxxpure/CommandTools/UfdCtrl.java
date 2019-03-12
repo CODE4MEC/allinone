@@ -16,18 +16,18 @@ public class UfdCtrl extends CommandExecution {
 	
 	public int UfdInit()
 	{
-	//建立ufd
+	//start the ufd
 		this.ExecCommand("ovs-vsctl add-br ovs-br2");
-	//与OVS连接
+	//connect with vSwitch
 		this.ExecCommand("ovs-vsctl \\\n" + 
 				"    -- add-port ovs-br1 patch1 \\\n" + 
 				"    -- set interface patch1 ofport_request=10001 type=patch options:peer=patch2  \\\n" + 
 				"    -- add-port ovs-br2 patch2 \\\n" + 
 				"    -- set interface patch2 ofport_request=10001 type=patch options:peer=patch1\n" + 
 				"");
-	//运行ufd应用
+	//running ufd application
 		this.ExecCommand("ryu-manager ufd.py");	
-	//将UFD连接到ryu控制器
+	//
 		this.ExecCommand("ovs-vsctl set-controller ovs-br2 tcp:127.0.0.1:6633");
 		return 0;
 	

@@ -108,7 +108,7 @@ public class NodeOnOffState {
 	public static NodeOnOffState FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+			//parse message
         ObjectMapper mapper = new ObjectMapper();
         NodeOnOffState obj = mapper.readValue(jsonStr, NodeOnOffState.class);
 		return obj;	     

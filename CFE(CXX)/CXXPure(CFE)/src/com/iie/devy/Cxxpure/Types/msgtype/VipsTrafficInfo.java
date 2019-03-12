@@ -46,7 +46,7 @@ public class VipsTrafficInfo {
 	public static VipsTrafficInfo FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+			//parse message
         ObjectMapper mapper = new ObjectMapper();
         VipsTrafficInfo obj = mapper.readValue(jsonStr, VipsTrafficInfo.class);
 		return obj;	     

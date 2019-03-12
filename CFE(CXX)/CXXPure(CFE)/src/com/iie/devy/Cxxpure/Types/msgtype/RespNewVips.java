@@ -51,7 +51,7 @@ public class RespNewVips {
 	public static RespNewVips FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+			//parse message
 			ObjectMapper mapper = new ObjectMapper();
 			RespNewVips obj = mapper.readValue(jsonStr, RespNewVips.class);
 			return obj;	     

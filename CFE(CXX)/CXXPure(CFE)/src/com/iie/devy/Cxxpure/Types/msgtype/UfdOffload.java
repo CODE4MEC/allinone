@@ -9,7 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class UfdOffload {
 
-	//在当前版本中，发给ufd的消息中只包含overload vips port
+	//the UFD port connected to the overloaded vIPS
 	@JsonProperty("port")
 	private int overload_port;
 	
@@ -69,7 +69,7 @@ public class UfdOffload {
 	public static UfdOffload FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+			//parse message
         ObjectMapper mapper = new ObjectMapper();
         UfdOffload obj = mapper.readValue(jsonStr, UfdOffload.class);
 		return obj;	     

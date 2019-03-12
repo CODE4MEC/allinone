@@ -1,3 +1,7 @@
+/*
+ * Main class of CXX(i.e., the previous name of CFE)
+ */
+
 package com.iie.devy.Cxxpure;
 
 import java.util.Date;
@@ -28,16 +32,16 @@ import com.iie.devy.Threads.*;
 import gnu.getopt.Getopt;
 
 public class CXX {
-	private final DockerCtrl DCTRL=new DockerCtrl();
-	private final OvsCtrl OCTRL=new OvsCtrl();
-	private final UfdCtrl UCTRL=new UfdCtrl();
-	private final VServerCtrl VCTRL=new VServerCtrl();
+	private final DockerCtrl DCTRL=new DockerCtrl(); //the handle for docker(vIPS)
+	private final OvsCtrl OCTRL=new OvsCtrl();//the handle for OVS
+	private final UfdCtrl UCTRL=new UfdCtrl();//the handle for UFDE
+	private final VServerCtrl VCTRL=new VServerCtrl();//the handle for vServer
 	
 	
-	private String m_id_mecNode;
-	private String m_id_ovs_mac;
+	private String m_id_mecNode; // the id for CXX/MEC node, e.g. "Node1"
+	private String m_id_ovs_mac; // MAC address of the local OVS (controlled by CDO)
 	
-	//TD： not finished 
+	//URLs for CDO API 
 	private String m_url_cdoApi_code_establish;
 	private String m_url_cdoApi_code_release;
 	private String m_url_cdoApi_nodestats;
@@ -49,27 +53,33 @@ public class CXX {
 	
 
 	
-	//运行中的容器数量
+	//the number of active container/vips
 //	private int m_num_container_running=0;
 	
+	// Names for available/taken container/vips
 	private ConcurrentLinkedQueue<String> q_avail_container_name = new ConcurrentLinkedQueue<String>();
 	private ConcurrentLinkedQueue<String> q_taken_container_name = new ConcurrentLinkedQueue<String>();
-	private ConcurrentLinkedQueue<String> q_reserved_name = new ConcurrentLinkedQueue<String>(); //只在初始化的时候使用
+	private ConcurrentLinkedQueue<String> q_reserved_name = new ConcurrentLinkedQueue<String>(); //Only used in initializing
 	
+	//Hash tables for ufd and vSwitch to record the information of the connected (local/foreign-aid<helping>) vIPS and the corresponding port number
 	private Hashtable<String,Integer> ht_vips_ufd_port=new  Hashtable<String,Integer>();
 	private Hashtable<String,Integer> ht_vips_ovs_port=new  Hashtable<String,Integer>();
 	
-	/*记录各个working vips的类型（local/helping）*/
+	/*type of working vips（local/helping）*/
 	private Hashtable<String, Integer> ht_vips_type=new Hashtable<String,Integer>();
 	
+	/*message to be sent to CDO when the node is start/shutdown*/
 	private String  msg_state_on;
 	private String  msg_state_off;
 	
+	/*the blocking queue used by td_vstatlisten and td_localadjust to communicate*/
 	private BlockingQueue<Hashtable<String, String>> bq_statlisten_localadjust;
-	private TdCdoCommandExecutor td_cdocommandexecutor;
-	private TdLocalAdjust td_localadjust;
-	private TdVStatListen td_vstatlisten;
-	private TdUStatListen td_ustatlisten;
+	
+	/*threads*/
+	private TdCdoCommandExecutor td_cdocommandexecutor; // the thread to execute the commands from CDO
+	private TdLocalAdjust td_localadjust; // the thread to determine to trigger local code, non-local code request, and code release
+	private TdVStatListen td_vstatlisten; // the thread to monitor the status of vIPSs
+	private TdUStatListen td_ustatlisten; // the thread to monitor the status of UFD
 	
 	private String ip_local="";
 	
@@ -106,14 +116,13 @@ public class CXX {
 		this.ht_vips_ufd_port.put("ufd",ParamDefault.PORT_UFD);
 		this.ht_vips_ovs_port.put("ufd",ParamDefault.PORT_UFD);
 		
-		//Logger related
+		/*Logger related*/
 		//FileAppender appender;
 		//HtmlLayout  layout = new HtmlLayout();
 		BasicConfigurator.configure();
 		logger.setLevel(Level.INFO);
 //		try
 //        {
-//            //把输出端配置到out.txt
 //            appender = new FileAppender(layout,"out.txt",false);
 //        }catch(Exception e)
 //        {            
@@ -127,6 +136,7 @@ public class CXX {
 		return this.m_id_ovs_mac;
 	}
 	
+	// release the information for the released/hung-up vIPS
 	public void ReleaseCNameNType(String name)
 	{
 		if(name!=null && (!name.isEmpty()))
@@ -139,6 +149,7 @@ public class CXX {
 		}
 	}
 	
+	/* generate a unused name, used for the newly activated vIPS*/
 	private String GetNewCName()
 	{
 		String name=this.q_avail_container_name.poll();
@@ -149,11 +160,13 @@ public class CXX {
 		return name;
 	}
 	
+	/*record the UFD port information of each connected vIPS*/
 	public void SetUfdVipsPortInfo(String name, int ufdport)
 	{
 		this.ht_vips_ufd_port.put(name, ufdport);
 	}
 	
+	/*record the vSwitch port information of each connected vIPS*/
 	public void SetOvsVipsPortInfo(String name, int ovsport)
 	{
 		this.ht_vips_ovs_port.put(name, ovsport);
@@ -181,6 +194,7 @@ public class CXX {
 		return -1;
 	}
 	
+	/*Get a available port number that is not used by both UFD and vSwitch*/
 	public int GetAvailOvsUfdPort()
 	{
 		int port=5000;
@@ -223,6 +237,7 @@ public class CXX {
 //	{
 //		CXX.m_max_num_container=max;
 //	}
+	
 	public int GetMaxContainerNum()
 	{
 		return ParamDefault.MAX_VIPS_NUM;
@@ -242,6 +257,7 @@ public class CXX {
 		return this.q_taken_container_name.size();
 	}
 	
+	/*set the url of each CDO API*/
 	public void SetUrl(int urltype, String url)
 	{
 		switch(urltype)
@@ -273,6 +289,7 @@ public class CXX {
 		}
 	}
 	
+	/*get the url of each CDO API*/
 	public String GetUrl(int urltype)
 	{
 		String ret="";
@@ -313,17 +330,19 @@ public class CXX {
 //		return DCTRL;
 //	}
 	
+	/*obtain the ports used by UFD*/
 	private ConcurrentLinkedQueue<Integer> GetUfdPorts()
 	{
 		return this.UCTRL.GetPorts();
 	}
 	
+	/*obtain the ports used by vSwitch*/
 	private ConcurrentLinkedQueue<Integer> GetOvsPorts()
 	{
 		return this.OCTRL.GetPorts();
 	}
 	
-	
+	/*obtain an available port of UFD*/
 	public int GetNewInitUfdPort()
 	{
 		ConcurrentLinkedQueue<Integer> ports = GetUfdPorts();
@@ -339,6 +358,7 @@ public class CXX {
 		return -1;
 	}
 	
+	/*obtain an available port of vSwitch*/
 	public int GetNewInitOvsPort(ConcurrentLinkedQueue<Integer> knownPorts)
 	{
 		ConcurrentLinkedQueue<Integer> ports = GetOvsPorts();
@@ -354,6 +374,9 @@ public class CXX {
 		return -1;
 	}
 	
+	/* start $initVipsNum$ number of working vIPS from idle vIPSs
+	 * Used by:TdlocalAdjust	
+	 */	
 	private void StartLocalWorkingVIPS(int initVipsNum) {
 		for(int i=0;i<initVipsNum;i++)
 		{
@@ -361,39 +384,42 @@ public class CXX {
 		}
 	}
 	
-	//潜在调用者：TdlocalAdjust
+	/* start 1 working vIPS from idle vIPSs	 */
 	public String StartLocalWorkingVIPS()
 	{
 		String name = "";
-		//如果vIPS数量不溢出，则新建，否则新建失败
+		//start a working vIPS only if there are at least 1 idle vIPSs
 		if(GetRunningContainerNum() <= (GetMaxContainerNum()-1) )
 		{
+			//generate a new name for the new working vips
 			name = GetNewCName();
 			if(name==null || name.isEmpty())
 			{
 				logger.error("no spare working vips name for local vips");
 				return "";
 			}
+			
+			//init the working vips with the new generated name
 			int rettmp=this.DCTRL.InitLocalWorkingVIPS(name);
 			
-			//若创建失败，释放名字资源
+			//release the name if failed
 			if(rettmp!=0)
 			{
 				ReleaseCNameNType(name);
 				return "";
 			}
 			
-			//记录vips类型
+			//record the information of the new vIPS
 			this.ht_vips_type.put(name, ParamDefault.TYPE_LOCAL_VIPS);
 			
-			//获取对应的port
+			//get the corresponding port in UFD that is used by the new working vIPS
 			int port=this.GetNewInitUfdPort();
 			if(port < 0)
 			{
 				logger.error("cannot parse the newly init ufd port");
 				return "";
 			}
-			//存储port信息
+			//store the port info
 			this.SetUfdVipsPortInfo(name, port);
 			Date d=new Date();
 			logger.debug(d.toString()+" the newly started local working vips "+name+" is binded with port "+port+" in ufd");
@@ -406,16 +432,27 @@ public class CXX {
 		return name;
 	}
 	
-	public void InformUfdToOffload()
+	public String GetMaxLoadedVips()
+	{
+		return this.id_ol_vips;
+	}
+	
+	/*inform UFD to offload the most overloaded vIPS, for detail see case 1 of VOCC
+	 * return: the string of SIPs to be offloaded
+	 * */
+	public String InformUfdToOffload()
 	{
 		if(this.id_ol_vips.isEmpty())
 		{
-			return;
+			return "";
 		}
-		InformUfdToOffload(this.id_ol_vips);
+		return InformUfdToOffload(this.id_ol_vips);
 	}
 	
-	public void InformUfdToOffload(String overloadVips)
+	/*inform UFD to offload the given vIPS, for detail see case 1 of VOCC
+	 * return: the string of SIPs to be offloaded
+	 * */
+	public String InformUfdToOffload(String overloadVips)
 	{
 		String url_ufd="http://127.0.0.1:"+UrlType.UFD_API_PORT+UrlType.SUFFIX_UFD_OFFLOAD;
 		
@@ -423,16 +460,18 @@ public class CXX {
 		if(port_ol<0)
 		{
 			logger.error("no ufd port for vips:"+overloadVips);
-			return;
+			return "";
 		}
 		this.id_ol_vips="";
 		
 		UfdOffload uo=new UfdOffload(port_ol);
 		String msg = uo.ToJsonString();
-		CxxTools.SendMessage(url_ufd, msg);
+		String ret=CxxTools.SendMessage(url_ufd, msg);
+		return ret;
 	}
 	
 	//CXX -> UFD
+	/*request UFD for port traffic information*/
 	public String GetUfdPortTrafficInfo()
 	{
 		String url_ufd="http://127.0.0.1:"+UrlType.UFD_API_PORT+UrlType.SUFFIX_UFD_PTINFO;
@@ -441,21 +480,23 @@ public class CXX {
 	}
 	
 	//CXX -> CDO
+	/*report the vIPS traffic information to CDO*/
+	/*not used in current version*/
 	public void ReportVipsTrafficInfo(VipsTrafficInfo info)
 	{
 		String url=this.GetUrl(UrlType.CDO_VIPS_TRAFFIC);
 		CxxTools.SendMessageWithoutLog(url, info.ToJsonString(),"POST");
 	}
 	
-	//TD
-	//潜在调用者：TdCdoCommandExecutor
+	/*Start a helping vIPS for a foreign requester*/
 	public String StartHelpingWorkingVIPS()
 	{
 		String name = "";
 		ConcurrentLinkedQueue<Integer> knownPorts;
-		//如果vIPS数量不溢出，则新建，否则新建失败
+		//Only start a vIPS when there are idle vIPSs
 		if(GetRunningContainerNum() <= (GetMaxContainerNum()-1) )
 		{
+			/*generate a new name for the vIPS name*/
 			name = GetNewCName();
 			if(name==null || name.isEmpty())
 			{
@@ -463,30 +504,30 @@ public class CXX {
 				return "";
 			}
 			
-			//记录现有port
+			//obtain the current ports used by vSwitch
 			knownPorts=this.GetOvsPorts();
 			
-			
+			//start a helping vIPS
 			int rettmp=this.DCTRL.InitHelpingWorkingVIPS(name);
 			
-			//若创建失败，释放名字资源
+			//release the name if failed
 			if(rettmp!=0)
 			{
 				ReleaseCNameNType(name);
 				return "";
 			}
 			
-			//记录vips类型
+			//record the vIPS information
 			this.ht_vips_type.put(name, ParamDefault.TYPE_HELPING_VIPS);
 			
-			//获取对应的port
+			//obtain the vSwitch port for the new generated helping vIPS
 			int port=this.GetNewInitOvsPort(knownPorts);
 			if(port < 0)
 			{
 				logger.error("cannot parse the newly init ufd port");
 				return "";
 			}
-			//存储port信息
+			//save the port information
 			this.SetOvsVipsPortInfo(name, port);
 			Date d=new Date();
 			logger.debug("[info]"+d.toString()+" the newly started helping working vips "+name+" is binded with port "+port+" in ovs");
@@ -527,6 +568,7 @@ public class CXX {
 		return this.VCTRL.VServerInit();
 	}
 	
+	/* init the idle/reserved vIPSs*/
 	public int ReservedVipsInit()
 	{
 		for(int i=0;i<GetMaxVipsNum();i++)
@@ -558,7 +600,7 @@ public class CXX {
 		return this.m_id_mecNode;
 	}
 	
-	//获取单个vips占用的cpu核数
+	/* get the cpus parameter for each vIPS */
 	public double GetParamCpus4Vips()
 	{
 		return ParamDefault.PARAM_CPUS;
@@ -569,22 +611,21 @@ public class CXX {
 //		return ParamDefault.PARAM_ID_CPU;
 //	}
 	
-	//查看VIPS的状态
-	//潜在调用方：TdStatListen
+	/* obtain the vips status information from string*/
 	public Hashtable<String, VipsStats> GetVipsStatsFromRaw(String raw_stats_info)
 	{
 		Hashtable<String, ContainerStats> hm_c_stats= this.DCTRL.ParseCStatsFromRaw(m_id_mecNode, raw_stats_info);	
 		return GetVStatsFromCStats(hm_c_stats);
 	}
 	
-	//查看VIPS的状态
-	//潜在调用方：TdStatListen
+	/* obtain the vips status information*/
 	public Hashtable<String, VipsStats> GetVipsStats()
 	{
 		Hashtable<String, ContainerStats> hm_c_stats= this.DCTRL.StatContainer(m_id_mecNode);
 		return GetVStatsFromCStats(hm_c_stats);
 	}
 	
+	/* transform the container status information to vips status information */
 	private Hashtable<String, VipsStats> GetVStatsFromCStats(Hashtable<String, ContainerStats> cstats)
 	{
 		Hashtable<String, VipsStats> vstats=new Hashtable<String, VipsStats>();
@@ -592,7 +633,7 @@ public class CXX {
 		ContainerStats tCStats=null;
 		VipsStats tVStats=null;
 		
-		//筛选属于vIPS的Containner，修正cpu参数后输出 
+		// filter the information for vips from containers' information, and rectify the cpu occupancy parameter 
         Iterator<String> it = cstats.keySet().iterator();  
         while(it.hasNext()) {  
             tName = (String)it.next();  
@@ -620,9 +661,10 @@ public class CXX {
 		return this.ip_local;
 	}
 	
+	/* used for test */
 	public int CxxInitTest(String str_CDO_IP)
 	{
-	    //CDO相关URL配置
+	    //URL configuration (CDO related)
 		String prefix="http://"+str_CDO_IP+":"+UrlType.CDO_API_PORT;
         this.SetUrl(UrlType.CDO_CONTAINER_STATS, prefix+UrlType.SUFFIX_CDO_CONTAINER_STATS);
         this.SetUrl(UrlType.CDO_NODE_STATS, prefix+UrlType.SUFFIX_CDO_NODE_STATS);
@@ -633,16 +675,15 @@ public class CXX {
         this.SetUrl(UrlType.CDO_AVERAGE_VIPS_STATS, prefix+UrlType.SUFFIX_CDO_AVERAGE_VIPS_STATS);
             
 		
-     // 线程初始化       
-        //初始化线程
+     // Thread initialization      
         this.td_cdocommandexecutor=new TdCdoCommandExecutor(this,UrlType.CXX_API_PORT);
                 
-        //启动线程
+        //start thread
         this.td_cdocommandexecutor.start();
         
         while(!this.td_cdocommandexecutor.GetDebugFlag())
         {
-            //sleep，等子线程起来之后进行下一步
+           
             try {
     			Thread.sleep(100);
     		} catch (InterruptedException e) {
@@ -657,10 +698,12 @@ public class CXX {
 		return 0;
 	}
 	
+	/*Initialization of CXX(CFE) */
 	public int CxxInit(String str_CDO_IP) throws InterruptedException
 	{
 		String str_MAC=GetOvsMacAddr();
-	    //CDO相关URL配置
+		
+	    //URL(CDO ralated) configuration
 		String prefix="http://"+str_CDO_IP+":"+UrlType.CDO_API_PORT;
         this.SetUrl(UrlType.CDO_CONTAINER_STATS, prefix+UrlType.SUFFIX_CDO_CONTAINER_STATS);
         this.SetUrl(UrlType.CDO_NODE_STATS, prefix+UrlType.SUFFIX_CDO_NODE_STATS);
@@ -672,28 +715,29 @@ public class CXX {
         this.SetUrl(UrlType.CDO_VIPS_TRAFFIC, prefix+UrlType.SUFFIX_CDO_VIPS_TRAFFIC);
 
             
-    //OnOff消息初始化 
+    //Prepare the state_on and state_off message
         NodeOnOffState state_on=new NodeOnOffState(this.GetMecNodeID(),str_MAC,this.GetLocalIpString(),UrlType.IP_UP,UrlType.IP_VServer,ParamDefault.PORT_OVS_VSERVER,NodeOnOffState.STATE_ON);           
         NodeOnOffState state_off=new NodeOnOffState(this.GetMecNodeID(),str_MAC,this.GetLocalIpString(),UrlType.IP_UP,UrlType.IP_VServer,ParamDefault.PORT_OVS_VSERVER,NodeOnOffState.STATE_OFF);
 
         this.msg_state_on = state_on.ToJsonString();
 		this.msg_state_off = state_off.ToJsonString();
         
-    // OVS，UFD，VIPS初始化
+    // Components (OVS，UFD，VIPS) initialization
 //        this.SetMaxContainerNum(10);
-//        //ovs初始化
+//        //ovs initialization
 //        if(0!=this.OvsInit(str_CDO_IP))
 //        	{
 //        		System.out.println("[error] OVS Init Failed!");
 //        		return -1;
 //        	}
-//        //ufd初始化
+//        //ufd initialization
 //        if(0!=this.UfdInit())
 //        {
 //        		System.out.println("[error] UFD Init Failed!");
 //        		return -2;
 //        }
-        //建立本地vIPS
+		// vIPS initialization
+        //start $ParamDefault.MAX_VIPS_NUM$ number of reserved(idle) vIPS
         int ret=this.ReservedVipsInit();
         if(ret != 0)
         {
@@ -706,6 +750,7 @@ public class CXX {
 //        		Thread.sleep(2000);
 //        }
         
+        // start working(active) vIPSs from reserved(idle) vIPSs
         this.StartLocalWorkingVIPS(GetInitVipsNum());
         
 //        if(0!=this.VServerInit())
@@ -713,21 +758,21 @@ public class CXX {
 //        		System.out.println("[error] VServer Init Failed");
 //        }
 		
-     // 线程初始化       
-        //初始化statlisten和localadjust线程间的通信blockingqueue
+     // Threads initialization      
+        //the blocking queue used by threads td_statlisten and td_localadjust for communication
         bq_statlisten_localadjust = new LinkedBlockingQueue<Hashtable<String,String>>();
-        //初始化线程
+        //threads
         this.td_cdocommandexecutor=new TdCdoCommandExecutor(this,UrlType.CXX_API_PORT);
         this.td_localadjust=new TdLocalAdjust(this,this.bq_statlisten_localadjust);
         this.td_vstatlisten=new TdVStatListen(this,this.bq_statlisten_localadjust,TdVStatListen.TYPE_CT);
         this.td_ustatlisten=new TdUStatListen(this);
-        //启动线程
+        //start threads
         this.td_vstatlisten.start();
         this.td_localadjust.start();
         this.td_cdocommandexecutor.start();
         this.td_ustatlisten.start();
         
-        //sleep，等子线程起来之后进行下一步
+        //wait for threads' initialization
         try {
         	logger.info("waiting for threads to init");
 			Thread.sleep(3000);
@@ -736,7 +781,7 @@ public class CXX {
 			return -4;
 		}
         
-        //上报节点on状态
+        //Inform the CDO with state_on message that the NODE is ready for CODE4MEC
         CxxTools.SendMessage(this.GetUrl(UrlType.CDO_ONOFF_STATS), msg_state_on);
         
 		return 0;
@@ -755,36 +800,37 @@ public class CXX {
 		return ParamDefault.MAX_VIPS_NUM;
 	}
 
+	/*shutdown the local node*/
 	public void CxxQuit()
 	{
 		logger.info("[info] Start release CXX");
-	//上报节点off状态
+	//Inform the CDO with state_off message that the NODE is shutdown
         CxxTools.SendMessage(this.GetUrl(UrlType.CDO_ONOFF_STATS), msg_state_off);
         
-    //关闭本地线程
+    //close threads
         this.td_vstatlisten.Shutdown();
         this.td_localadjust.Shutdown();
         this.td_cdocommandexecutor.Shutdown();
         this.td_ustatlisten.Shutdown();
         
-    //TD:释放ovs
+    //OVS release
 //        this.OCTRL.OvsRelease();
         
-    //TD:释放ufd
+    //UFD release
 //        this.UCTRL.UfdRelease();
         
-    //释放vServer
+    //vServer release
 //        this.VCTRL.VServerRelease();        
      
-    //释放所有vIPS
-        //释放所有working vIPS为reserved vIPS
+    //vIPS release
+        //transform all working(active) vIPSs to reserved(idle) vIPSs
         String tname="";
         while( (tname=this.q_taken_container_name.poll()) != null)
         {
         		ReleaseWorkingVIPS(tname);
         }
         
-        //释放所有的reserved VIPS
+        //release all reserved VIPSs
         while( (tname=this.q_avail_container_name.poll()) != null)
         {
         		ReleaseReservedVIPS(tname);
@@ -792,9 +838,10 @@ public class CXX {
    
 	}
 	
+	/*releasing of helping vIPS (helping vIPS -> reserved vIPS)*/
 	public int ReleaseCodePair4Hvips(String name) throws InterruptedException
 	{
-		//check permission
+		//check permission from CDO
 		String cdoapi_coderelease=this.GetUrl(UrlType.CDO_CODE_RELEASE);
 		String global_hvips_name=this.GetMecNodeID()+"_"+name;
 		NormalMessage coderelease=new NormalMessage(NormalMessage.CODE_RELEASE_P1_CHECK_PERMISSION,global_hvips_name);
@@ -805,11 +852,11 @@ public class CXX {
 			return -101;
 		}
 		
-		//若CDO允许，则在5秒后释放
+		//CDO has permitted the release. Release after 5 seconds
 		Thread.sleep(5*1000);	
 		ReleaseWorkingVIPS(name);
 		
-		//释放完成后，报告CDO，请求释放流表
+		//the helping vIPS has been released to reserved vIPS. Inform CDO for the releasing of routing rules
 		NormalMessage releaserules=new NormalMessage(NormalMessage.CODE_RELEASE_P2_REQ_DEL_RULES,global_hvips_name);
 		ret=CxxTools.SendMessage(cdoapi_coderelease, releaserules.ToJsonString());
 		if(!ret.equals(UrlType.RESP_SUCCESS))
@@ -821,7 +868,7 @@ public class CXX {
 		return 0;
 	}
 	
-	//根据vips类型进行本地释放
+	/*releasing of working vIPS (including local vips and helping vips)*/
 	public int ReleaseWorkingVIPS(String name)
 	{	
 		int ret=0;
@@ -831,15 +878,15 @@ public class CXX {
 			return -10;
 		}
 		
-		//根据vips的类型进行释放
+		//release the vIPS according to its type
 		Integer type=this.ht_vips_type.get(name);
 		switch(type)
 		{
-		case ParamDefault.TYPE_LOCAL_VIPS:
+		case ParamDefault.TYPE_LOCAL_VIPS: // release for local working vIPS;  local working vIPS -> reserved vIPS
 			ret=this.DCTRL.ReleaseLocalWorkingVIPS(name);
 		break;
 		
-		case ParamDefault.TYPE_HELPING_VIPS:
+		case ParamDefault.TYPE_HELPING_VIPS: // release for helping working vIPS; helping vIPS -> reserved vIPS
 			ret=this.DCTRL.ReleaseHelpingWorkingVIPS(name);
 		break;
 		
@@ -850,11 +897,13 @@ public class CXX {
 		
 		}
 		
+		//release of vIPS's name
 		this.ReleaseCNameNType(name);
 		
 		return ret;
 	}
 	
+	/*release of reserved vIPS*/
 	public int ReleaseReservedVIPS(String name)
 	{
 		if(!this.q_avail_container_name.contains(name))
@@ -865,12 +914,12 @@ public class CXX {
 		return this.DCTRL.ReleaseReservedVIPS(name);
 	}
 	
+
 	public static void main(String [] args) throws InterruptedException{
-		//获取命令行参数
-		// -n 节点名
-		// -m MAC地址
-		// -s CDO 地址
-		// -h help
+		
+		//helping message
+		//for launching, e.g., java -jar ./CXXPure.jar -c 0.5 -t 5 -n Node1 -l 10.10.26.190 -L 192.168.0.101 -s 10.10.28.151 -m 18:66:da:f2:ee:4d  -S 192.168.95.101 -p 3
+
 		String str_helpmessage="-n [NodeName]\n"
 							  +"-m [MAC ADDRESS] \n"
 							  +"-s [CDO IP]\n"
@@ -889,6 +938,7 @@ public class CXX {
 		String str_Node_Name="";
 		String str_LOCAL_IP="";
 		
+		// parse the parameters
 		int res;  
 		while( (res = testOpt.getopt()) != -1 ) {  
 			switch(res) {  
@@ -932,8 +982,7 @@ public class CXX {
 		
 //	//test temp
 //		 CXX cxx=new CXX(str_Node_Name,str_LOCAL_IP);
-//		 cxx.CxxInitTest(str_CDO_IP, str_MAC);		 
-//	    //计时1min后结束               
+//		 cxx.CxxInitTest(str_CDO_IP, str_MAC);		              
 //       try {
 //       		Thread.sleep(60*1000);
 //		} catch (InterruptedException e) {
@@ -943,7 +992,7 @@ public class CXX {
 //    // end test temp
 		
 			
-	//初始化
+	//Initialization
         CXX cxx=new CXX(str_Node_Name,str_LOCAL_IP,str_MAC);
         int ret=cxx.CxxInit(str_CDO_IP);
 //        int ret=cxx.CxxInitTest(str_CDO_IP);
@@ -953,7 +1002,7 @@ public class CXX {
         		cxx.CxxQuit(); 
         		return;
         }
-    //计时xx后结束               
+    //hung up the main thread              
         try {
         		Thread.sleep(24*60*60*1000);
 		} catch (InterruptedException e) {
@@ -965,6 +1014,7 @@ public class CXX {
         cxx.CxxQuit();            
     }
 
+	/* tell whether the tName is used for any vIPS*/
 	private boolean IsVIPS(String tName) {
 		if(this.q_taken_container_name.contains(tName))
 		{
@@ -973,21 +1023,25 @@ public class CXX {
 		return false;
 	}
 
+	/* command execution, used in CODE establishment */
 	public int InitCodeOvsCommand(int tunid, int port) {
 		return this.OCTRL.InitCodeOvsCommand(tunid,port);
 	}
 	
+	/* command execution, used in CODE release*/
 	public int ReleaseCodeOvsCommand(int tunid, int port)
 	{
 		return this.OCTRL.ReleaseCodeOvsCommand(tunid,port);
 	}
-
+	
+	/* report the node status information to CDO */
 	public void ReportNodeStatsInfo() {
 		String url_ns_update=this.GetUrl(UrlType.CDO_NODE_STATS);
 		NodeStats ns=new NodeStats(this);
 		CxxTools.SendMessageWithoutLog(url_ns_update, ns.ToJsonString(),"POST");
 	}
-
+	
+	/*get the total number of local working vIPSs*/
 	public int CountLocalVips() {
 		int count=0;
 		for(Entry<String, Integer> entry: this.ht_vips_type.entrySet()){
@@ -1000,6 +1054,7 @@ public class CXX {
 		return count;
 	}
 
+	/* report average result of vIPS status to CDO */
 	public void ReportAverageVStats(AverageVStats avs) {
 		// TODO Auto-generated method stub
 		String url=this.GetUrl(UrlType.CDO_AVERAGE_VIPS_STATS);
@@ -1012,6 +1067,7 @@ public class CXX {
 //		return GetVipsTrafficInfoFromRawString(raw_info);
 //	}
 	
+	/* parse the vips traffic information from UFD message*/
 	public VipsTrafficInfo GetVipsTrafficInfoFromRawString(String str_ufd_port_traffic_info)
 	{
 		if(str_ufd_port_traffic_info.isEmpty())
@@ -1057,6 +1113,7 @@ public class CXX {
 		return new VipsTrafficInfo(ht_vips_traffic);
 	}
 	
+	/*record the information of the foreign helping vips*/
 	public int RecordForeignHelpingVipsPortInfo(int port)
 	{
 		boolean flag=false;
@@ -1084,7 +1141,7 @@ public class CXX {
 		}
 	}
 	
-	
+	/*remove the information of the foreign helping vips*/
 	public int RmRecordForeignHelpingVipsPortInfo(Integer port)
 	{
 		boolean flag=false;
@@ -1101,7 +1158,7 @@ public class CXX {
 					break;
 				}
 			}
-		}
+		} 
 		
 		if(flag)
 		{
@@ -1114,4 +1171,15 @@ public class CXX {
 		}
 				
 	}
+	
+	//dev19
+	public String  GetContextInfoFromVIPS(String vips_name, String SIPs)
+	{
+		return this.DCTRL.GetContextInfoFromVIPS(vips_name, SIPs);
+	}
+	public int SetContextInfoToVIPS(String vips_name,String contextinfo)
+	{
+		return this.DCTRL.SetContextInfoToVIPS( vips_name, contextinfo);
+	}
+	//edev19
 }

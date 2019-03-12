@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+//Different from ContainerStats in the correction of cpu usage information
 public class VipsStats extends ContainerStats {
 
 	public VipsStats(String nid, String cid, String name, float cpu_percent, float mem_percent) {
@@ -25,7 +26,7 @@ public class VipsStats extends ContainerStats {
 		CheckAlarm();
 	}
 	
-	//修正cpu占比
+	//correct the cpu usage
 	public void RectifyCpuPercent(double param_cpu_nums)
 	{
 		if(0!=param_cpu_nums)
@@ -52,7 +53,7 @@ public class VipsStats extends ContainerStats {
 	public static VipsStats FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+    	  	//parse message
         ObjectMapper mapper = new ObjectMapper();
         VipsStats obj = mapper.readValue(jsonStr, VipsStats.class);
 		return obj;	     

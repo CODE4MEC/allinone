@@ -33,18 +33,25 @@ public class CommandExecution {
 		try {
 			p = run.exec(command);
 			
-			//读取命令的输出信息
+			//read the result of the execution
 			InputStream is = p.getInputStream();
 			BufferedReader reader = new BufferedReader(new InputStreamReader(is));
 			
 			p.waitFor();
 			if (p.exitValue() != 0) {
-			    //说明命令执行失败
-			    //可以进入到错误处理步骤中
-				logger.error("error in executing: "+command);
+			    //failed in execution
+			    //read error stream
+				InputStream stderr = p.getErrorStream();
+	            InputStreamReader isr = new InputStreamReader(stderr);
+	            BufferedReader br = new BufferedReader(isr);
+	            String line = null;
+	            String errmsg="error in executing command:"+command+"\n stderr=\n";
+	            while ((line = br.readLine()) != null)
+	                errmsg+=(line);
+	            logger.error(errmsg);			
 				return "";
 			}
-			//打印输出信息
+			//print the response message
 			ret="";
 			String s = null;
 			while ((s = reader.readLine()) != null) {

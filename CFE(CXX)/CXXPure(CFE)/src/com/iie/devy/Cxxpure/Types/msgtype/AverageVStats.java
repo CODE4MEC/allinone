@@ -101,7 +101,7 @@ public class AverageVStats {
 	public static AverageVStats FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+			//parse message
         ObjectMapper mapper = new ObjectMapper();
         AverageVStats obj = mapper.readValue(jsonStr, AverageVStats.class);
 		return obj;	     

@@ -252,7 +252,7 @@ public class CDO implements IFloodlightModule, IOFMessageListener, CdoService {
 		if(this.m_ht_node_states.containsKey(nid))
 		{
 			
-			//将解析到的alarm节点置入requester ht 中
+			//add the alarming node to requester hashtable
 			this.m_ht_providers.remove(nid);
 			this.m_ht_requesters.put(nid, nid);
 			
@@ -1447,6 +1447,15 @@ private Match Init_GetMatch(int ruleID, NodeOnOffState onoff) {
 		NormalMessage req_ovs_command = new NormalMessage(NormalMessage.REQ_OVS_COMMAND,""+tunid,""+port_requester_avail);
 		msg_ret=SendJson("http://"+ip_requester+":"+UrlType.CXX_API_PORT+UrlType.SUFFIX_CXX_CODE_PAIR_INIT
 			  	,req_ovs_command.ToJsonString());
+		if(!msg_ret.equals(UrlType.RESP_SUCCESS))
+		{
+			System.out.println("[error] error rsp_ovs_command message:"+msg_ret);
+			return -4;
+		}
+	//
+		NormalMessage req_ufd_offload = new NormalMessage(NormalMessage.REQ_UFD_OFFLOAD,ip_provider,""+name_helping_vips);
+		msg_ret=SendJson("http://"+ip_requester+":"+UrlType.CXX_API_PORT+UrlType.SUFFIX_CXX_CODE_PAIR_INIT
+			  	,req_ufd_offload.ToJsonString());
 		if(!msg_ret.equals(UrlType.RESP_SUCCESS))
 		{
 			System.out.println("[error] error rsp_ovs_command message:"+msg_ret);

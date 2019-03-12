@@ -100,7 +100,7 @@ public class ContainerStats {
 	
 	protected void CheckAlarm()
 	{
-		//报警判断
+		//alarm pre-judgment
 		//if( ( this.m_cpu_percent > ParamDefault.TH_CPU_ALARM ) && (this.m_mem_percent > ParamDefault.TH_MEM_ALARM))
 		if( ( this.m_cpu_percent > ParamDefault.TH_CPU_ALARM ) )
 
@@ -173,7 +173,7 @@ public class ContainerStats {
 	public static ContainerStats FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+			//parse message
         ObjectMapper mapper = new ObjectMapper();
         ContainerStats obj = mapper.readValue(jsonStr, ContainerStats.class);
 		return obj;	     

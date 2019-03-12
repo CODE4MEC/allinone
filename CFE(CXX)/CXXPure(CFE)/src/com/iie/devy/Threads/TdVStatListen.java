@@ -1,3 +1,13 @@
+/*
+ * The thread for monitoring the information of vIPS
+ * Two monitoring types are supported
+ * 1. typeIM, the reading process is returned immediantely, 
+ * 		read the vIPS information every $F_LISTEN_PERIOD$ ms 
+ * 		based on "docker stats --no-stream"
+ * 2. typeCT, the reading process is never returned
+ * 		read the vIPS information continuously, the result is queued with blocking queue
+ * 		based on "docker stats"
+ */
 package com.iie.devy.Threads;
 
 import java.io.BufferedReader;
@@ -16,10 +26,7 @@ import com.iie.devy.Cxxpure.Default.ParamDefault;
 import com.iie.devy.Cxxpure.Types.msgtype.AverageVStats;
 import com.iie.devy.Cxxpure.Types.msgtype.VipsStats;
 
-//监听线程，周期性监听容器状态并上报
-//支持两种监听方式：
-//typeIM.周期性监听，利用立刻输出的docker stats --no-stream 命令，每F_LISTEN_PERIOD测一次
-//typeCT.持续监听，利用持续输出的docker stats命令，启用专门用于监听的线程，每秒通过blockingqueue获得一次结果
+
 public class TdVStatListen extends Thread
 {	
 	private static final Logger logger=Logger.getLogger(TdVStatListen.class);
@@ -36,11 +43,11 @@ public class TdVStatListen extends Thread
 	public static final String REQ_SHUT_DOWN="REQ_SHUT_DOWN";
 	
 	private CXX m_cxx;
-	private BlockingQueue<Hashtable<String,String>> m_bq_req_vips;//新增或删除vIPS（本地/外地）申请队列
-	private BlockingQueue<String>m_bq_cstats=new LinkedBlockingQueue<String>();//用于接收子线程上报的容器状态信息
+	private BlockingQueue<Hashtable<String,String>> m_bq_req_vips;//queuing the requests for adding/deleting new local/foreign-aid vIPS
+	private BlockingQueue<String>m_bq_cstats=new LinkedBlockingQueue<String>();//queuing the container information from sub-thread
 	
 	
-	//存储各个vIPS的状态
+	//storing the status information of each vIPS
 	private Hashtable<String,VipsStats> m_ht_vipsstats=null;
 	private Hashtable<String,Integer> m_ht_alarmcount=new Hashtable<String,Integer>();
 	private int count_lowoccupant_slots=0;
@@ -130,25 +137,28 @@ public class TdVStatListen extends Thread
 			break;
 		}
 	}
-	//typeIM.周期性监听，利用立刻输出的docker stats --no-stream 命令，每F_LISTEN_PERIOD测一次
+
+/* * 1. typeIM, the reading process is returned immediantely, 
+ * 		read the vIPS information every $F_LISTEN_PERIOD$ ms 
+ * 		based on "docker stats --no-stream"
+ */
 	public void run_typeIM() {
 		
 		logger.info("Thread TdStatListen launches");
 				
 		while(!this.m_flag_shutdown)
 		{			
-		//查看状态
+		//check the status
 			m_ht_vipsstats=this.m_cxx.GetVipsStats();
 		
-		//信息上报
-			//上报当前节点状态
+		//upload information
+			//upload the status of current nodes
 			this.m_cxx.ReportNodeStatsInfo();
-			//上报vips平均负载状态
+			//upload the average load of vIPSs
 			AverageVStats avs=new AverageVStats(this.m_cxx.GetMecNodeID(),this.m_ht_vipsstats);
 			this.m_cxx.ReportAverageVStats(avs);
 			
-		// 新建/释放vips检查
-			//只有在没有新建vips需求的时候才检测是否需要释放vips
+		// check for generating/releasing vIPSs request
 			if( !AlarmDetectNInform())
 			{
 				ReleaseDetectNInform();
@@ -156,7 +166,7 @@ public class TdVStatListen extends Thread
 			
 		
 			
-	        //等待下一个时隙
+	        //wait for the next time slot
 			try {
 				Thread.sleep(ParamDefault.SAMPLE_PERIOD_TYPE_IM);
 			} catch (InterruptedException e) {
@@ -169,8 +179,12 @@ public class TdVStatListen extends Thread
 		logger.info("Thread TdStatListen ends");
 		
 	}
-	//typeCON.持续监听，利用持续输出的docker stats命令，启用专门用于监听的线程，每秒通过blockingqueue获得一次结果
-	public void run_typeCT()
+	
+	/*
+	 * 2. typeCT, the reading process is never returned
+	 * 		read the vIPS information continuously, the result is queued with blocking queue
+	 * 		based on "docker stats"
+	 */	public void run_typeCT()
 	{
 		try
 		{
@@ -179,19 +193,18 @@ public class TdVStatListen extends Thread
 			td_cs_listen.start();
 			while(!this.m_flag_shutdown)
 			{			
-			//查看状态
+			//check the status
 				String raw_cstats=this.m_bq_cstats.take();				
 				m_ht_vipsstats=this.m_cxx.GetVipsStatsFromRaw(raw_cstats);
 			
-			//信息上报
-				//上报当前节点状态
+			//upload information
+				//upload the status of current nodes
 				this.m_cxx.ReportNodeStatsInfo();
-				//上报vips平均负载状态
+				//upload the average load of vIPSs
 				AverageVStats avs=new AverageVStats(this.m_cxx.GetMecNodeID(),this.m_ht_vipsstats);
 				this.m_cxx.ReportAverageVStats(avs);
 				
-			// 新建/释放vips检查
-				//只有在没有新建vips需求的时候才检测是否需要释放vips
+				// check for generating/releasing vIPSs request
 				if( !AlarmDetectNInform())
 				{
 					ReleaseDetectNInform();
@@ -216,15 +229,15 @@ public class TdVStatListen extends Thread
 		VipsStats tStats=null;
 		boolean lowOccupancyFlag=false;
 		
-		//记录相关
-		int num_vips=0;//记录实际vips数
+		//Record
+		int num_vips=0;//the number of working vIPSs
 		String name_local_vips_to_release="";
 		double overhead_local_vips_to_release=200;
 		String name_helping_vips_to_release="";
 		double overhead_helping_vips_to_release=200;
 		double sum_overhead=0;
 		
-		//采用Iterator遍历HashMap  
+		//iterate Hashmap
         Iterator<String> it = this.m_ht_vipsstats.keySet().iterator();  
         while(it.hasNext()) {  
         	
@@ -233,14 +246,14 @@ public class TdVStatListen extends Thread
           //double t_overhead = tStats.getCPUPercent()+tStats.getMemPercent();
             double t_overhead = tStats.getCPUPercent();
             
-            //本地vips和helping vips有着不同的释放规则
+            //release the vIPS according to its typed
             switch(this.m_cxx.GetWorkingVipsType(tName))
             {
             case ParamDefault.TYPE_LOCAL_VIPS:
-	        //记录整体信息    
+	        //summary information    
 	            num_vips++;         
 	            sum_overhead += t_overhead;         		
-	        //记录负载最低的vIPS
+	        //record the lowest-loaded vIPS
 	            if(t_overhead < overhead_local_vips_to_release)
 	            {
 	            		name_local_vips_to_release=tName;
@@ -262,8 +275,10 @@ public class TdVStatListen extends Thread
             
         }
         
-        //本地低载判断标准: 当前N个vips的总overhead能不溢出的装入N-1个容量不超过特定阈值的vips
-        //helping vips低载判断标准：单个helpingvips负载低于helping vips阈值
+        /*
+         * a local working vIPS is in low load if  ( sum_overhead < ( (num_vips-1)*(ParamDefault.TH_CPU_RELEASE+ParamDefault.TH_MEM_RELEASE) ) )
+         * a (local) helping vIPS is in low load if the overhead of the helping vIPS is lower than ParamDefault.TH_CPU_RELEASE_HELPING
+        */
         //if( sum_overhead < ( (num_vips-1)*(ParamDefault.TH_CPU_RELEASE+ParamDefault.TH_MEM_RELEASE) ) )
         if( (sum_overhead < ( (num_vips-1)*(ParamDefault.TH_CPU_RELEASE_LOCAL) ) )
           ||(overhead_helping_vips_to_release <= ParamDefault.TH_CPU_RELEASE_HELPING) )
@@ -271,13 +286,14 @@ public class TdVStatListen extends Thread
         	lowOccupancyFlag=true;
         }
         
-        //当连续TH_RELEASE_SLOT_NUM个时隙都走低时，CheckRelease返回true
+        //CheckRelease() will return true if the low loading lasts for TH_RELEASE_SLOT_NUM slots
         if(CheckRelease(lowOccupancyFlag))
         {
-        	//最终释放本地和外地负载更低的那个,相同则优先释放本地
+        	//Release the vIPS with lowest load
+        	//if 2 vIPSs are in the same lowest load, the local vIPS is preferred to be released than the helping vips 
         	String name_final=(overhead_helping_vips_to_release<overhead_local_vips_to_release)?
         				      name_helping_vips_to_release:name_local_vips_to_release;
-        	//释放请求，释放负载最低的vIPS
+        	//put the release request in m_bq_req_vips
     		Hashtable<String,String> ht = new Hashtable<String,String>();
     		ht.put(TdVStatListen.REQ_REL_VIPS, name_final);
     		try {
@@ -296,7 +312,7 @@ public class TdVStatListen extends Thread
 		String msg_req_new_vIPS="";
 		boolean ret=false;
 		
-		//采用Iterator遍历HashMap  
+		//iterate HashMap  
         Iterator<String> it = this.m_ht_vipsstats.keySet().iterator();  
         while(it.hasNext()) {  
             tName = (String)it.next();  
@@ -307,15 +323,14 @@ public class TdVStatListen extends Thread
 //            					 +"CPU%:"+tStats.getCPUPercent() +"%\t"
 //            					 +"MEM%:"+tStats.getMemPercent() +"%");
             
-        //alarm和请求新vIPS相关
             try {
-            		//一个时隙只请求一次vIPS
+            		//request at most 1 vIPS per time slot
         			if(!msg_req_new_vIPS.isEmpty())
         			{
         				continue;
         			}
             	
-            		//记录报警次数，决定是否请求新vIPS（本地/外地）,发送请求
+            		//record the times of overloading, and decide whether to request for a new vIPS
 	            if( CheckAlarm(tName,tStats.getAlarmFlag()) )
 	            {
 	            		msg_req_new_vIPS=tName;
@@ -325,7 +340,7 @@ public class TdVStatListen extends Thread
 	            		
 	            		ret=true;
 	            		
-	            		//记录overload的vips
+	            		//record the overloaded vips
 	            		this.m_cxx.SetOlVips(tName);
 	            }		            				        		      			            
             }
@@ -339,14 +354,14 @@ public class TdVStatListen extends Thread
 		return ret;
 	}
 
-	//连续多个时隙报警才算
+	/*return true only if a local working vIPS is overloaded for a period of time*/
 	private boolean CheckAlarm(String tName, boolean alarmFlag) {
 		int t_slot_num=0;
 		int SLOTNUM=(this.type==TYPE_IM)?
 					ParamDefault.TH_ALARM_SLOT_NUM_TYPE_IM:
 					ParamDefault.TH_ALARM_SLOT_NUM_TYPE_CT;
 		
-		//报警仅对本地vips起作用，不管协作的vips
+		//the alarm only works for local working vIPS, regardless of helping vIPS
 		if(this.m_cxx.GetWorkingVipsType(tName)!=ParamDefault.TYPE_LOCAL_VIPS)
 		{
 			return false;
@@ -376,7 +391,7 @@ public class TdVStatListen extends Thread
 		
 		if(t_slot_num >= SLOTNUM)
 		{
-			/*清空报警信息*/
+			/*clear alarm*/
 			this.m_ht_alarmcount.put(tName, 0);
 			return true;
 		}
@@ -384,7 +399,7 @@ public class TdVStatListen extends Thread
 		return false;
 	}
 	
-	//连续多个时隙走低才算
+	//return true only if a local working vIPS is in low load for a period of time
 	private boolean CheckRelease(boolean lowOccupancyFlag) {
 		int SLOTNUM=(this.type==TYPE_IM)?
 				ParamDefault.TH_RELEASE_SLOT_NUM_TYPE_IM:

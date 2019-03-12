@@ -30,6 +30,10 @@ public class NormalMessage {
 	@JsonIgnore
 	public static final String REQ_OVS_COMMAND="REQ_OVS_COMMAND";
 	@JsonIgnore
+	public static final String REQ_UFD_OFFLOAD="REQ_UFD_OFFLOAD";
+	@JsonIgnore
+	public static final String REQ_CONTEXT_TRANSFER_CFE="REQ_CONTEXT_TRANSFER_CFE";
+	@JsonIgnore
 	public static final String CODE_RELEASE_P1_CHECK_PERMISSION="CODE_RELEASE_P1_CHECK_PERMISSION";
 	@JsonIgnore
 	public static final String CODE_RELEASE_P2_REQ_DEL_RULES="CODE_RELEASE_P2_REQ_DEL_RULES";

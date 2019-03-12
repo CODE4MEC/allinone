@@ -1,3 +1,5 @@
+/* vSwitch(OVS) Control Tools*/
+
 package com.iie.devy.Cxxpure.CommandTools;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -13,14 +15,14 @@ public class OvsCtrl extends CommandExecution {
 	
 	public int OvsInit(String ipCdo) 
 	{
-	//建立ovs交换机
+	//obtain a new ovs
 		this.ExecCommand("ovs-vsctl add-br ovs-br1"); 
-	//ovs交换机连接到物理网卡
+	//connect the ovs to network card
 		this.ExecCommand("ovs-vsctl add-port ovs-br1 eno1");
 		this.ExecCommand("ip addr flush dev eno1");
 		this.ExecCommand("ifconfig ovs-br1 192.168.95.169 netmask 255.255.255.0 broadcast 192.168.95.255 up");
 		this.ExecCommand("route add default gw 192.168.95.2 dev ovs-br1");
-	//连接到CDO
+	//connect to CDO
 		this.ExecCommand("ovs-vsctl set-controller ovs-br1 tcp:"+ipCdo+":6633");
 		return 0;
 	}
@@ -32,6 +34,7 @@ public class OvsCtrl extends CommandExecution {
 		return 0;
 	}
 
+	/*obtain the port info of the vSwitch*/
 	public ConcurrentLinkedQueue<Integer> GetPorts() {
 		ConcurrentLinkedQueue<Integer> ports=new ConcurrentLinkedQueue<Integer>();
 		String portinfo=this.ExecCommand("ovs-ofctl show ovs-br1");
@@ -94,7 +97,7 @@ public class OvsCtrl extends CommandExecution {
 		String patch_name_1="patch"+tunid+"_1";
 		String patch_name_2="patch"+tunid+"_2";
 		
-		//在新建前先删除已有的，防止新建错误
+		//delete before establishment, in case of error
 		ReleaseCodeOvsCommand(patch_name_1, patch_name_2);
 		
 		String command="sudo ovs-vsctl " + 

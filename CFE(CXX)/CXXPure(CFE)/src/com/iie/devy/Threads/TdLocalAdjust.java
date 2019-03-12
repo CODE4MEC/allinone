@@ -1,3 +1,7 @@
+/*
+ * The thread for deciding the triggering of local CODE, non-local CODE, and CODE release
+ * The decision is based on vIPS status
+ */
 package com.iie.devy.Threads;
 
 import java.util.Hashtable;
@@ -13,7 +17,7 @@ import com.iie.devy.Cxxpure.Default.ParamDefault;
 import com.iie.devy.Cxxpure.Default.UrlType;
 import com.iie.devy.Cxxpure.Types.msgtype.Alarm;
 
-//根据本地的vIPS状态决定：本地生成vIPS，或上报请求
+
 public class TdLocalAdjust extends Thread
 {
 	private static final Logger logger=Logger.getLogger(TdLocalAdjust.class);
@@ -105,7 +109,7 @@ public class TdLocalAdjust extends Thread
 			break;
 			
 		case ParamDefault.TYPE_LOCAL_VIPS:
-			//本地至少保留一个vips
+			//keep at least one local working vIPS
 			if(this.m_cxx.CountLocalVips()>1)
 			{
 				this.m_cxx.ReleaseWorkingVIPS(id_vips_to_release);
@@ -117,24 +121,33 @@ public class TdLocalAdjust extends Thread
 	}
 
 	private void ReqNewVips(String id_vips_overload)  {
-		//如果有生成新vips的空间，则生成新的vips
+		//start new local working vIPS if available
 		if( this.m_cxx.GetMaxContainerNum() > this.m_cxx.GetRunningContainerNum())
 		{
-		//生成新的vips
-			this.m_cxx.StartLocalWorkingVIPS();	
-		//TD:迁移
-			//告知ufd做offload
-			this.m_cxx.InformUfdToOffload(id_vips_overload);
+		//local CODE triggering	
+			//start new local working vips
+			String id_vips_new=this.m_cxx.StartLocalWorkingVIPS();	
+			//ask ufd for local offloading (VOCC CASE 1)
+			String str_offload_sips=this.m_cxx.InformUfdToOffload(id_vips_overload);
+			if(!str_offload_sips.isEmpty())
+			{
+				String contextinfo=m_cxx.GetContextInfoFromVIPS(id_vips_overload,str_offload_sips);
+				int tmp=m_cxx.SetContextInfoToVIPS(id_vips_new,contextinfo);
+				if(tmp!=0)
+				{
+					logger.error("[ReqNewVips] error in setting context info to vIPS\""+id_vips_new+"\", contextinfo="+contextinfo);
+				}
+			}
 			
 		} 
 		else
 		{
-		//上报request
-			//生成alarm对象
+		//non-local CODE triggering
+			//generate CODE request
 			Alarm alarm = new Alarm(this.m_cxx.GetMecNodeID());
-			//转化为json格式
+			//transfer into json string
 			String alarmMsg = alarm.ToJsonString();
-			//发送scheduling请求
+			//ask CDO for scheduling
 			CxxTools.SendMessage(this.m_cxx.GetUrl(UrlType.CDO_CODE_ESTABLISH),alarmMsg);
 		}
 		

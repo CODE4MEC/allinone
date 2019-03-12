@@ -1,6 +1,14 @@
+/* vIPS(docker) Control Tools*/
+
+
 package com.iie.devy.Cxxpure.CommandTools;
 
 
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.Hashtable;
 
 import org.apache.log4j.Logger;
@@ -18,12 +26,12 @@ public class DockerCtrl extends CommandExecution {
 		return run;
 	}
 	
-	//TD:对于调用该方法的方法，记得检查返回值，若返回值不为0，则释放对应ID资源
+	
 	public int InitLocalWorkingVIPS(String ID)
 	{
 		int ret=0;
 		
-		//将VIPS连接到UFD
+		//Connect vIPS to UFD
 		String str_ret=this.ExecCommand("ovs-docker add-port ovs-br2 eth0 "
 					+ ID +" "
 					+"--ipaddress=192.168.97.101/24 "
@@ -46,7 +54,7 @@ public class DockerCtrl extends CommandExecution {
 	{
 		int ret=0;
 		
-		//将vIPS连接到OVS（不是UFD!）
+		//connect vIPS to vSwitch (not UFD!!)
 		String str_ret=this.ExecCommand("ovs-docker add-port ovs-br1 eth0 "
 				+ ID +" "
 				+"--ipaddress=192.168.97.101/24 "
@@ -80,7 +88,7 @@ public class DockerCtrl extends CommandExecution {
 				//" --cpuset-cpus="+ paramCpuset +" "+
 				" ips-image");
 		
-		//若创建失败，则释放
+		//release if failed
 		if(answer.isEmpty() || answer.contains("Error"))
 		{
 			logger.error("error in StartVIPS, Fail to Start, answer="+answer);
@@ -99,7 +107,7 @@ public class DockerCtrl extends CommandExecution {
 		return 0;
 	}
 	
-	//将working vips转变为Reserved VIPS
+	//release local working vIPS, working vIPS -> reserved vIPS
 	public int ReleaseLocalWorkingVIPS(String ID)
 	{
 		//DEL PORT
@@ -162,7 +170,7 @@ public class DockerCtrl extends CommandExecution {
 		Hashtable<String,ContainerStats> statsmap=new Hashtable<String, ContainerStats>();
 		String[] tokens=raw_container_stats.split("\n");
 		
-		//i从1开始（不要第0行）
+		//the 0th line is abandoned
 		for(int i=1;i<tokens.length;i++)
 		{
 			ContainerStats stats=new ContainerStats(tokens[i],id_mecNode);
@@ -170,4 +178,57 @@ public class DockerCtrl extends CommandExecution {
 		}
 		return statsmap;
 	}	
+	
+	//dev19 
+		public String  GetContextInfoFromVIPS(String vips_name, String SIPs)
+		{
+//			String command="docker exec -i "+vips_name+" /bin/sh /root/getcontext.sh -s "+" \""+SIPs+"\"";
+//			return this.ExecCommand(command);
+			final String filename="./SIP.txt";
+			WriteFile(filename,SIPs);
+			String command="docker cp "+filename+" "+vips_name+":/root/";
+			this.ExecCommand(command);
+			command="docker exec -i "+vips_name+" /bin/sh /root/getcontext.sh";
+			return this.ExecCommand(command);
+		}
+		public int SetContextInfoToVIPS(String vips_name,String contextinfo)
+		{
+//			String command="docker exec -i "+vips_name+" /bin/sh /root/setcontext.sh -c "+"\""+contextinfo+"\"";
+			final String filename="./contextinfo.txt";
+			WriteFile(filename,contextinfo);
+			String command="docker cp "+filename+" "+vips_name+":/root/";
+			this.ExecCommand(command);
+			command="docker exec -i "+vips_name+" /bin/sh /root/setcontext.sh";
+			String ret= this.ExecCommand(command);
+			System.out.println(ret);
+			if(ret.contains("DySuccess"))
+			{
+				return 0;
+			}
+			else 
+			{
+				logger.error(ret);
+				return -1;
+			}
+		}
+		
+		private void WriteFile(String name, String content)
+		{
+			try {
+				FileOutputStream outSTr;
+				outSTr = new FileOutputStream(new File(name));
+				BufferedOutputStream Buff = new BufferedOutputStream(outSTr);
+	            Buff.write(content.getBytes());
+	            Buff.flush();
+	            Buff.close();
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+	        
+		}
+		//edev19
 }

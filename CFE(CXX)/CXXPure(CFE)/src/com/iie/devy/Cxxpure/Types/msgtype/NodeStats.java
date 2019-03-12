@@ -92,7 +92,7 @@ public class NodeStats {
 	public static NodeStats FromJsonString(String jsonStr)
 	{
 		try {
-    	  	//解析msg
+			//parse message
         ObjectMapper mapper = new ObjectMapper();
         NodeStats ns = mapper.readValue(jsonStr, NodeStats.class);
 		return ns;	     
